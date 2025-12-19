@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100 Желаний | Ольга Васильева</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        deepBlue: '#1a1a2e',
+                        gold: '#b8860b',
+                        goldHover: '#d4a017',
+                        secondaryBlue: '#4a4a6e',
+                        bgLight: '#f8fafc'
+                    },
+                    fontFamily: {
+                        heading: ['Playfair Display', 'serif'],
+                        body: ['Lato', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase to window for React component access
+        window.firebaseApp = initializeApp(JSON.parse(localStorage.getItem('firebaseConfig') || document.getElementById('firebase-config').textContent));
+        window.auth = getAuth(window.firebaseApp);
+        window.db = getFirestore(window.firebaseApp);
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.updateDoc = updateDoc;
+        window.deleteDoc = deleteDoc;
+        window.doc = doc;
+        window.onSnapshot = onSnapshot;
+        window.query = query;
+        window.serverTimestamp = serverTimestamp;
+        window.getDocs = getDocs;
+        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'wishes-app-default';
+    </script>
+    
+    <!-- Firebase Config Placeholder (Injected by environment or manually set) -->
+    <script id="firebase-config" type="application/json">
+        {"apiKey":"AIzaSyD...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."} 
+    </script>
+    <script>
+        // Fallback if environment doesn't inject config
+        if (typeof __firebase_config !== 'undefined') {
+            document.getElementById('firebase-config').textContent = __firebase_config;
+        }
+    </script>
+
+    <style>
+        /* Custom Styles for "Journal" Feel */
+        body {
+            background-color: #f8fafc;
+            color: #334155;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .hero-bg {
+            background: linear-gradient(rgba(26, 26, 46, 0.6), rgba(26, 26, 46, 0.8)),
+                        url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80') no-repeat center center/cover;
+            background-attachment: fixed;
+        }
+
+        .card-shadow {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+        }
+        
+        .card-shadow:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+        }
+
+        /* Image hover zoom */
+        .img-zoom-container {
+            overflow: hidden;
+        }
+        .img-zoom {
+            transition: transform 0.8s ease;
+        }
+        .card-shadow:hover .img-zoom {
+            transform: scale(1.05);
+        }
+
+        /* Modal Animation */
+        .modal-enter {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1a1a2e;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8860b;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- MOCK DATA FOR SEEDING (As per TZ) ---
+        const INITIAL_WISHES = [
+            {
+                title: "Посетить Ниагарский водопад",
+                shortDesc: "Мощь природы на границе двух стран.",
+                fullDesc: "Увидеть водопад с лодки Maid of the Mist, промокнуть до нитки и почувствовать невероятную энергию падающей воды.",
+                location: "США / Канада",
+                prep: "Виза, билеты, дождевик",
+                cost: "3000$",
+                imageUrl: "https://images.unsplash.com/photo-1533094602577-198d3600003e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "done",
+                date: "2024-08-15"
+            },
+            {
+                title: "Полетать на истребителе",
+                shortDesc: "Высший пилотаж и перегрузки.",
+                fullDesc: "Полёт на реактивном учебно-боевом самолете Л-39 или МиГ-29 с выполнением фигур высшего пилотажа.",
+                location: "Россия, Подмосковье",
+                prep: "Медосмотр, инструктаж",
+                cost: "1500$",
+                imageUrl: "https://images.unsplash.com/photo-1552528148-18e330a1334c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2026"
+            },
+            {
+                title: "Полетать на воздушном шаре",
+                shortDesc: "Рассвет над Каппадокией.",
+                fullDesc: "Встретить рассвет в корзине воздушного шара над долиной Любви, наблюдая за сотнями других шаров.",
+                location: "Турция, Каппадокия",
+                prep: "Бронь за полгода",
+                cost: "500$",
+                imageUrl: "https://images.unsplash.com/photo-1504732099162-d8c9d5ba3f4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2026"
+            },
+            {
+                title: "Увидеть северное сияние",
+                shortDesc: "Танцующие огни Арктики.",
+                fullDesc: "Охота за северным сиянием за полярным кругом. Ночевка в стеклянном иглу.",
+                location: "Россия, Мурманск",
+                prep: "Теплая одежда, удача",
+                cost: "1000$",
+                imageUrl: "https://images.unsplash.com/photo-1483347752404-8fe70972b9a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "done",
+                date: "2025-02-20"
+            },
+            {
+                title: "Научиться кататься на серфинге",
+                shortDesc: "Покорить первую волну в Азии.",
+                fullDesc: "Недельный серф-кемп на пляже Карон с профессиональным инструктором. Встать на доску и проехать хотя бы 5 метров.",
+                location: "Таиланд, Пхукет, Карон",
+                prep: "Физподготовка, солнцезащитный крем",
+                cost: "2000$",
+                imageUrl: "https://images.unsplash.com/photo-1502680390469-be75c86b636f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2027"
+            },
+            {
+                title: "Япония: Сезон сакуры",
+                shortDesc: "Древние храмы и розовые лепестки.",
+                fullDesc: "Путешествие по золотому маршруту Токио-Киото-Осака во время цветения вишни.",
+                location: "Япония",
+                prep: "JR Pass, Виза",
+                cost: "4000$",
+                imageUrl: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2028"
+            },
+            {
+                title: "Пройти путь Сантьяго",
+                shortDesc: "Пешее паломничество через Испанию.",
+                fullDesc: "Пройти последние 100 км французского пути до Сантьяго-де-Компостела.",
+                location: "Испания",
+                prep: "Треккинговая обувь, рюкзак",
+                cost: "1200$",
+                imageUrl: "https://images.unsplash.com/photo-1551632811-561732d1e306?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2029"
+            },
+            {
+                title: "Дайвинг на Большом Барьерном рифе",
+                shortDesc: "Подводный мир Австралии.",
+                fullDesc: "Погружение с аквалангом к самым красивым кораллам планеты.",
+                location: "Австралия",
+                prep: "Сертификат PADI",
+                cost: "5000$",
+                imageUrl: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2030"
+            },
+            {
+                title: "Научиться играть на фортепиано",
+                shortDesc: "Сыграть Лунную сонату.",
+                fullDesc: "Год занятий с преподавателем, чтобы суметь сыграть классическое произведение без ошибок.",
+                location: "Дома",
+                prep: "Купить цифровое пианино",
+                cost: "1000$",
+                imageUrl: "https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2025"
+            },
+            {
+                title: "Написать свою книгу",
+                shortDesc: "Оставить след в истории.",
+                fullDesc: "Закончить и издать роман или сборник рассказов о путешествиях.",
+                location: "Любое тихое место",
+                prep: "Ноутбук, вдохновение",
+                cost: "Бесценно",
+                imageUrl: "https://images.unsplash.com/photo-1455390582262-044cdead277a?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                status: "planned",
+                date: "2030"
+            }
+        ];
+
+        // --- COMPONENTS ---
+
+        const Hero = ({ completedCount, totalCount }) => {
+            const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+            
+            return (
+                <header className="hero-bg relative h-screen min-h-[600px] flex flex-col justify-center items-center text-center text-white px-4">
+                    <div className="max-w-4xl z-10 animate-[fadeIn_1.5s_ease-out]">
+                        <h1 className="font-heading text-5xl md:text-7xl lg:text-8xl font-bold mb-6 tracking-widest drop-shadow-lg">
+                            100 ЖЕЛАНИЙ
+                        </h1>
+                        <h2 className="font-heading text-xl md:text-2xl italic text-gray-200 mb-8 font-light">
+                            Личный виш-лист приключений Васильевой Ольги для яркой жизни
+                        </h2>
+                        <div className="inline-block border-t border-b border-gold py-4 mb-12">
+                            <p className="font-body text-lg md:text-xl tracking-wide opacity-90 font-light">
+                                «Мир слишком велик, чтобы сидеть на месте. Начинаем охоту за впечатлениями!»
+                            </p>
+                        </div>
+                        
+                        <div className="w-full max-w-lg mx-auto">
+                            <span className="block text-gold text-sm tracking-[0.2em] uppercase mb-3">
+                                Исполнено {completedCount} из {totalCount} желаний ({percentage}%)
+                            </span>
+                            <div className="h-1 bg-white/20 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-gold shadow-[0_0_10px_#b8860b] transition-all duration-1000 ease-out"
+                                    style={{ width: `${percentage}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            );
+        };
+
+        const WishCard = ({ wish, onClick }) => (
+            <article 
+                className="card-shadow bg-white rounded-sm flex flex-col h-full cursor-pointer group"
+                onClick={() => onClick(wish)}
+            >
+                <div className="img-zoom-container h-64 relative">
+                    <img 
+                        src={wish.imageUrl} 
+                        alt={wish.title} 
+                        loading="lazy"
+                        className="img-zoom w-full h-full object-cover"
+                        onError={(e) => { e.target.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
+                    />
+                    {wish.status === 'done' && (
+                        <div className="absolute top-4 right-4 bg-gold text-white text-xs font-bold px-3 py-1 uppercase tracking-wider shadow-md">
+                            Выполнено
+                        </div>
+                    )}
+                </div>
+                <div className="p-8 flex flex-col flex-grow">
+                    <h4 className="font-heading text-2xl text-deepBlue mb-4 leading-tight group-hover:text-gold transition-colors">
+                        {wish.title}
+                    </h4>
+                    <p className="font-body text-gray-600 mb-6 flex-grow text-sm line-clamp-3">
+                        {wish.shortDesc}
+                    </p>
+                    <div className="mt-auto pt-6 border-t border-slate-100 flex justify-between items-center text-sm">
+                        <span className={`font-bold uppercase tracking-wider ${wish.status === 'done' ? 'text-gold' : 'text-slate-400'}`}>
+                            {wish.status === 'done' ? '✔ Выполнено' : 'В планах'}
+                        </span>
+                        <span className="italic text-slate-500">
+                            {wish.status === 'done' ? wish.date : `${wish.date} год`}
+                        </span>
+                    </div>
+                    <div className="mt-4 text-deepBlue text-xs font-bold uppercase tracking-widest hover:text-gold transition-colors">
+                        Подробнее &rarr;
+                    </div>
+                </div>
+            </article>
+        );
+
+        const WishModal = ({ wish, onClose }) => {
+            if (!wish) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-deepBlue/90 backdrop-blur-sm" onClick={onClose}>
+                    <div 
+                        className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-sm modal-enter grid md:grid-cols-2 shadow-2xl" 
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="h-64 md:h-auto relative">
+                            <img 
+                                src={wish.imageUrl} 
+                                alt={wish.title} 
+                                className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent md:hidden"></div>
+                        </div>
+                        <div className="p-8 md:p-12 relative">
+                            <button 
+                                onClick={onClose}
+                                className="absolute top-4 right-4 text-slate-400 hover:text-deepBlue text-2xl"
+                            >
+                                &times;
+                            </button>
+                            
+                            <span className={`inline-block mb-4 px-3 py-1 text-xs font-bold uppercase tracking-wider border ${
+                                wish.status === 'done' 
+                                ? 'border-gold text-gold' 
+                                : 'border-slate-300 text-slate-400'
+                            }`}>
+                                {wish.status === 'done' ? 'Цель достигнута' : 'В планах'}
+                            </span>
+
+                            <h3 className="font-heading text-3xl md:text-4xl text-deepBlue font-bold mb-6">
+                                {wish.title}
+                            </h3>
+
+                            <div className="space-y-6 text-slate-600 font-body leading-relaxed">
+                                <div>
+                                    <h5 className="font-bold text-deepBlue uppercase tracking-wide text-xs mb-2">Описание</h5>
+                                    <p>{wish.fullDesc || wish.shortDesc}</p>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <h5 className="font-bold text-deepBlue uppercase tracking-wide text-xs mb-2">Где</h5>
+                                        <p>{wish.location}</p>
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-deepBlue uppercase tracking-wide text-xs mb-2">Цена</h5>
+                                        <p>{wish.cost}</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h5 className="font-bold text-deepBlue uppercase tracking-wide text-xs mb-2">Подготовка</h5>
+                                    <p>{wish.prep}</p>
+                                </div>
+
+                                {wish.status === 'done' && (
+                                    <div className="pt-4 border-t border-slate-100">
+                                        <p className="text-gold italic">Выполнено: {wish.date}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ContactFooter = ({ onAdminClick, user }) => {
+            const [email, setEmail] = useState('');
+            const [message, setMessage] = useState('');
+            const [status, setStatus] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!user) {
+                    alert('Ошибка соединения с базой данных. Пожалуйста, обновите страницу.');
+                    return;
+                }
+                
+                setStatus('sending');
+                
+                try {
+                    const { addDoc, collection, serverTimestamp, db, appId } = window;
+                    // Write to Firestore (Public messages collection)
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
+                        email,
+                        message,
+                        createdAt: serverTimestamp(),
+                        read: false
+                    });
+                    
+                    setStatus('sent');
+                    setEmail('');
+                    setMessage('');
+                    setTimeout(() => setStatus(''), 5000);
+                } catch (error) {
+                    console.error("Error sending message:", error);
+                    setStatus('error');
+                }
+            };
+
+            return (
+                <footer className="bg-deepBlue text-white py-20 px-4 mt-20">
+                    <div className="max-w-2xl mx-auto text-center">
+                        <h3 className="font-heading text-4xl text-gold mb-12">Написать автору</h3>
+                        
+                        {status === 'sent' ? (
+                            <div className="bg-green-500/10 border border-green-500 text-green-400 p-6 rounded mb-8">
+                                Сообщение отправлено. Спасибо.
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="flex flex-col gap-6 text-left">
+                                <textarea
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    rows="5"
+                                    className="bg-white/5 border border-white/10 p-4 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-colors font-body"
+                                    placeholder="Ваше сообщение"
+                                    required
+                                ></textarea>
+                                <input
+                                    type="text"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="bg-white/5 border border-white/10 p-4 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-colors font-body"
+                                    placeholder="Ваш Email или Telegram"
+                                    required
+                                />
+                                <button 
+                                    type="submit" 
+                                    disabled={status === 'sending'}
+                                    className="bg-gold hover:bg-goldHover text-white py-4 px-8 font-bold uppercase tracking-widest transition-colors duration-300 disabled:opacity-50"
+                                >
+                                    {status === 'sending' ? 'Отправка...' : 'Отправить'}
+                                </button>
+                            </form>
+                        )}
+
+                        <button 
+                            onClick={onAdminClick}
+                            className="mt-20 text-xs text-white/20 hover:text-white/60 transition-colors uppercase tracking-widest"
+                        >
+                            Войти (Admin)
+                        </button>
+                    </div>
+                </footer>
+            );
+        };
+
+        const AdminPanel = ({ onLogout, user }) => {
+            const [activeTab, setActiveTab] = useState('wishes'); // wishes | messages
+            const [wishes, setWishes] = useState([]);
+            const [messages, setMessages] = useState([]);
+            const [editingWish, setEditingWish] = useState(null); // null = list mode, obj = edit mode
+            
+            // Fetch Data
+            useEffect(() => {
+                if (!user) return;
+
+                const { db, collection, onSnapshot, appId } = window;
+                
+                // NO orderBy() here to avoid index errors. Sort in JS.
+                const wishesRef = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+                const unsubWishes = onSnapshot(wishesRef, (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // Manual sorting: Done first, then by title
+                    data.sort((a, b) => {
+                        if (a.status === b.status) return a.title.localeCompare(b.title);
+                        return a.status === 'done' ? -1 : 1;
+                    });
+                    setWishes(data);
+                });
+
+                const messagesRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+                const unsubMessages = onSnapshot(messagesRef, (snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // Manual sorting by date desc
+                    data.sort((a, b) => {
+                        const tA = a.createdAt?.seconds || 0;
+                        const tB = b.createdAt?.seconds || 0;
+                        return tB - tA;
+                    });
+                    setMessages(data);
+                });
+
+                return () => { unsubWishes(); unsubMessages(); };
+            }, [user]);
+
+            const handleSaveWish = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const wishData = Object.fromEntries(formData);
+                
+                const { db, collection, addDoc, updateDoc, doc, appId } = window;
+
+                try {
+                    if (editingWish.id) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wishes', editingWish.id), wishData);
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'wishes'), {
+                            ...wishData,
+                            createdAt: new Date()
+                        });
+                    }
+                    setEditingWish(null);
+                } catch (err) {
+                    alert("Ошибка сохранения: " + err.message);
+                }
+            };
+
+            const handleDeleteWish = async (id) => {
+                if(!confirm("Удалить желание?")) return;
+                try {
+                    const { db, deleteDoc, doc, appId } = window;
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'wishes', id));
+                } catch(err) { alert(err.message); }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-100 font-body text-slate-800">
+                    <nav className="bg-deepBlue text-white p-4 sticky top-0 z-40 shadow-lg">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <h1 className="font-heading text-xl font-bold text-gold">Admin Panel</h1>
+                            <div className="flex gap-4">
+                                <button onClick={() => { setActiveTab('wishes'); setEditingWish(null); }} className={`px-4 py-2 rounded ${activeTab === 'wishes' ? 'bg-gold text-white' : 'hover:bg-white/10'}`}>Желания</button>
+                                <button onClick={() => { setActiveTab('messages'); setEditingWish(null); }} className={`px-4 py-2 rounded ${activeTab === 'messages' ? 'bg-gold text-white' : 'hover:bg-white/10'}`}>Сообщения ({messages.filter(m=>!m.read).length})</button>
+                                <button onClick={onLogout} className="px-4 py-2 border border-white/20 rounded hover:bg-red-500/20">Выйти</button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-7xl mx-auto p-6">
+                        {activeTab === 'wishes' && !editingWish && (
+                            <div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold">Список желаний ({wishes.length})</h2>
+                                    <button onClick={() => setEditingWish({})} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                                        + Добавить желание
+                                    </button>
+                                </div>
+                                <div className="grid gap-4">
+                                    {wishes.map(wish => (
+                                        <div key={wish.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                                            <div className="flex items-center gap-4">
+                                                <img src={wish.imageUrl} className="w-16 h-16 object-cover rounded" />
+                                                <div>
+                                                    <h3 className="font-bold">{wish.title}</h3>
+                                                    <span className={`text-xs px-2 py-1 rounded ${wish.status === 'done' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                        {wish.status === 'done' ? 'Выполнено' : 'В планах'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setEditingWish(wish)} className="text-blue-600 hover:underline">Ред.</button>
+                                                <button onClick={() => handleDeleteWish(wish.id)} className="text-red-600 hover:underline">Удал.</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'wishes' && editingWish && (
+                            <div className="bg-white p-6 rounded shadow max-w-2xl mx-auto">
+                                <h2 className="text-2xl font-bold mb-6">{editingWish.id ? 'Редактировать' : 'Новое желание'}</h2>
+                                <form onSubmit={handleSaveWish} className="space-y-4">
+                                    <input name="title" defaultValue={editingWish.title} placeholder="Название" required className="w-full border p-2 rounded" />
+                                    <textarea name="shortDesc" defaultValue={editingWish.shortDesc} placeholder="Краткое описание" required className="w-full border p-2 rounded h-20" />
+                                    <textarea name="fullDesc" defaultValue={editingWish.fullDesc} placeholder="Полное описание" required className="w-full border p-2 rounded h-32" />
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <input name="location" defaultValue={editingWish.location} placeholder="Страна/Место" className="w-full border p-2 rounded" />
+                                        <input name="cost" defaultValue={editingWish.cost} placeholder="Стоимость" className="w-full border p-2 rounded" />
+                                    </div>
+                                    
+                                    <input name="prep" defaultValue={editingWish.prep} placeholder="Подготовка" className="w-full border p-2 rounded" />
+                                    <input name="imageUrl" defaultValue={editingWish.imageUrl} placeholder="Ссылка на фото" required className="w-full border p-2 rounded" />
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <select name="status" defaultValue={editingWish.status || 'planned'} className="w-full border p-2 rounded">
+                                            <option value="planned">В планах</option>
+                                            <option value="done">Выполнено</option>
+                                        </select>
+                                        <input name="date" defaultValue={editingWish.date} placeholder="Год или Дата" className="w-full border p-2 rounded" />
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-4">
+                                        <button type="button" onClick={() => setEditingWish(null)} className="px-4 py-2 border rounded">Отмена</button>
+                                        <button type="submit" className="px-4 py-2 bg-gold text-white rounded hover:bg-goldHover">Сохранить</button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
+
+                        {activeTab === 'messages' && (
+                            <div className="bg-white rounded shadow overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="p-4 border-b">Дата</th>
+                                            <th className="p-4 border-b">Контакт</th>
+                                            <th className="p-4 border-b">Сообщение</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {messages.length === 0 ? <tr><td colSpan="3" className="p-4 text-center">Нет сообщений</td></tr> : 
+                                        messages.map(msg => (
+                                            <tr key={msg.id} className="hover:bg-slate-50 border-b">
+                                                <td className="p-4 text-sm text-slate-500">
+                                                    {msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000).toLocaleDateString() : 'Недавно'}
+                                                </td>
+                                                <td className="p-4 font-bold text-deepBlue">{msg.email}</td>
+                                                <td className="p-4 text-slate-700">{msg.message}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('public'); // public | login | admin
+            const [wishes, setWishes] = useState([]);
+            const [selectedWish, setSelectedWish] = useState(null);
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(true);
+            const [user, setUser] = useState(null);
+
+            // 1. Initial Auth and Data Seeding
+            useEffect(() => {
+                const { auth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, db, collection, getDocs, addDoc, appId } = window;
+                
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                };
+                initAuth();
+
+                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        // Check if DB is empty, if so, seed it
+                        const wishesRef = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+                        const snapshot = await getDocs(wishesRef);
+                        
+                        if (snapshot.empty) {
+                            console.log("Seeding database...");
+                            for (const wish of INITIAL_WISHES) {
+                                await addDoc(wishesRef, wish);
+                            }
+                        }
+                        
+                        // Setup Realtime Listener for App
+                        // REMOVED orderBy to prevent Index Error. Sorting in JS.
+                        const { onSnapshot } = window;
+                        
+                        onSnapshot(wishesRef, (snap) => {
+                            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                            // Custom sort: Done first, then Title
+                            data.sort((a, b) => {
+                                if (a.status === b.status) return a.title.localeCompare(b.title);
+                                return a.status === 'done' ? -1 : 1;
+                            });
+                            setWishes(data);
+                            setLoading(false);
+                        }, (error) => {
+                            console.error("Firestore error:", error);
+                            setLoading(false);
+                        });
+                    }
+                });
+
+                return () => unsubscribe();
+            }, []);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (password === 'admin123') {
+                    setView('admin');
+                } else {
+                    alert("Неверный пароль");
+                }
+            };
+
+            const completedCount = wishes.filter(w => w.status === 'done').length;
+
+            if (loading) return <div className="h-screen flex items-center justify-center text-deepBlue font-heading text-xl">Загрузка вдохновения...</div>;
+
+            if (view === 'admin') {
+                return <AdminPanel onLogout={() => setView('public')} user={user} />;
+            }
+
+            if (view === 'login') {
+                return (
+                    <div className="h-screen flex items-center justify-center bg-deepBlue">
+                        <form onSubmit={handleLogin} className="bg-white p-8 rounded shadow-2xl max-w-sm w-full text-center">
+                            <h2 className="font-heading text-2xl mb-6 text-deepBlue">Вход в систему</h2>
+                            <input 
+                                type="password" 
+                                value={password} 
+                                onChange={e => setPassword(e.target.value)}
+                                className="w-full border p-3 mb-4 font-body focus:border-gold outline-none"
+                                placeholder="Пароль администратора"
+                                autoFocus
+                            />
+                            <div className="flex justify-between gap-4">
+                                <button type="button" onClick={() => setView('public')} className="text-gray-500 hover:text-deepBlue text-sm">Назад</button>
+                                <button type="submit" className="bg-gold text-white px-6 py-2 rounded hover:bg-goldHover">Войти</button>
+                            </div>
+                        </form>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <Hero completedCount={completedCount} totalCount={wishes.length} />
+                    
+                    <main className="flex-grow px-4 py-20 bg-bgLight">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="text-center mb-16">
+                                <h3 className="font-heading text-4xl md:text-5xl text-deepBlue mb-4">Коллекция впечатлений</h3>
+                                <div className="w-24 h-1 bg-gold mx-auto"></div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+                                {wishes.map(wish => (
+                                    <WishCard key={wish.id} wish={wish} onClick={setSelectedWish} />
+                                ))}
+                            </div>
+                        </div>
+                    </main>
+
+                    <ContactFooter onAdminClick={() => setView('login')} user={user} />
+                    
+                    {selectedWish && (
+                        <WishModal wish={selectedWish} onClose={() => setSelectedWish(null)} />
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
